@@ -1,3 +1,9 @@
 .venv/
 __pycache__/
 .streamlit/secrets.toml
+
+/.local/
+/.backups/
+/API_key.py
+/jobs/results/
+/.pytest_cache/
