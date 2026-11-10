@@ -12,7 +12,16 @@ STATION = """JSON_OBJECT('station_id', s.stat_id, 'station_name', s.station_name
     'address', COALESCE(s.address, '주소 미제공'), 'lat', s.lat, 'lng', s.lng,
     'sigungu_code', s.svg_sigungu_code, 'api_sido', s.source_sido_code,
     'operator', COALESCE(s.operator_name, '미제공'), 'hours', COALESCE(s.operating_hours, '미제공'),
-    'phone', s.operator_phone, 'source', '충전소 정보')"""
+    'phone', s.operator_phone, 'source', '충전소 정보',
+    'availability', (
+        SELECT MAX(CASE
+            WHEN latest.status_code = '2' THEN 2
+            WHEN latest.status_code IN ('3', '4', '5') THEN 0
+            ELSE 1
+        END)
+        FROM charger c LEFT JOIN charger_status_latest latest USING (stat_id, chger_id)
+        WHERE c.stat_id = s.stat_id AND c.deleted_flag = 'N'
+    ))"""
 
 
 def map_stations(where, order="s.stat_id", limit=""):
@@ -87,7 +96,8 @@ def map_metrics():
 
     registrations = [json.loads(row) for row in mysql_query("""
         SELECT JSON_OBJECT('sido_code', m.svg_sido_code, 'group', e.aggregate_region_code,
-            'region_name', e.source_region_name, 'ev_count', e.ev_count, 'report_month', e.report_month)
+            'region_name', e.source_region_name, 'ev_count', e.ev_count, 'report_month', e.report_month,
+            'source_file', e.source_file)
         FROM ev_sido_monthly e JOIN registration_region_map m
           ON e.aggregate_region_code=m.aggregate_region_code AND e.source_region_name=m.source_region_name
         WHERE e.report_month=(SELECT MAX(report_month) FROM ev_sido_monthly);
@@ -104,4 +114,15 @@ def map_metrics():
         total["public_kw"] += counts["public_kw"]
         provinces.extend({**row, **counts, "combined": len(group) > 1} for row in group)
     month = registrations[0]["report_month"][:7] if registrations else ""
-    return {"sidoMetrics": provinces, "sigunguMetrics": districts, "nationalMetrics": dict(total), "reportMonth": month}
+    passenger_trend = [json.loads(row) for row in mysql_query("""
+        SELECT JSON_OBJECT('month', DATE_FORMAT(report_month, '%Y-%m'),
+                           'rate', 100.0 * ev_count / non_business_passenger_count,
+                           'evCount', ev_count, 'totalCount', non_business_passenger_count,
+                           'sourceFile', source_file)
+        FROM ev_passenger_monthly
+        WHERE report_month >= '2020-01-01' AND report_month < '2027-01-01'
+          AND non_business_passenger_count > 0
+        ORDER BY report_month;
+    """)]
+    return {"sidoMetrics": provinces, "sigunguMetrics": districts, "nationalMetrics": dict(total),
+            "reportMonth": month, "passengerTrend": passenger_trend}

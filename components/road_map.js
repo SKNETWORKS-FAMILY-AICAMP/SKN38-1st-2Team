@@ -33,9 +33,18 @@
    if(item.type==='background'||source==='water'||source==='waterway'&&item.type==='line')return true;
    if(source==='transportation')return /^(highway_|tunnel_motorway_)/.test(item.id);
    return source==='transportation_name'&&/^highway-name-(major|minor)$/.test(item.id);
-  }).map(item=>item['source-layer']==='transportation_name'?{
-   ...item,layout:{...item.layout,'text-field':['coalesce',['get','name:ko'],['get','name'],['get','name:latin']]}
-  }:item);
+  }).map(item=>{
+   const paint={...item.paint};
+   if(item.type==='background')paint['background-color']='#edf0e4';
+   if(item['source-layer']==='water'&&item.type==='fill')paint['fill-color']='#d5e5e5';
+   if(item['source-layer']==='waterway'&&item.type==='line')paint['line-color']='#94b7bf';
+   if(item['source-layer']==='transportation'&&item.type==='line'){
+    paint['line-color']=item.id.includes('casing')?'#edf0e4':'#adb69b';
+   }
+   if(item['source-layer']!=='transportation_name')return {...item,paint};
+   return {...item,paint:{...paint,'text-color':'#435943','text-halo-color':'#edf0e4','text-halo-width':1},
+    layout:{...item.layout,'text-field':['coalesce',['get','name:ko'],['get','name'],['get','name:latin']]}};
+  });
   const roads=layers.filter(item=>item.type==='line'&&item['source-layer']==='transportation').map(item=>item.id);
   if(!roads.length)throw new Error('Road layers unavailable');
   const sources=Object.fromEntries(layers.filter(item=>item.source).map(item=>[item.source,style.sources[item.source]]));

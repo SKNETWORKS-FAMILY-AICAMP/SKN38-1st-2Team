@@ -9,6 +9,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
+from jobs.crawl_registrations import AttachmentParser, LISTING, fetch
 from services.charger_status import ChargerStatusError, station_status, sync_info
 from services.geocoding import AddressSearchError, search_addresses
 from services.kakaomap_api import search_nearby_cafes
@@ -18,13 +19,23 @@ from services.mysql_map import district_stations, find_station, map_metrics, nea
 ROOT = Path(__file__).parent
 MAP_ASSET = ROOT / "assets/maps.json"
 st.set_page_config(page_title="EV 충전 인프라 지도", page_icon="⚡", layout="wide", initial_sidebar_state="collapsed")
-st.markdown("<style>.block-container{max-width:1600px;padding:0.5rem 1rem}header[data-testid=stHeader]{display:none!important}iframe{border:0}</style>", unsafe_allow_html=True)
+st.markdown("<style>.stApp{background:#ffffff;color:#1b3123}.block-container{max-width:1600px;padding:0.5rem 1rem}header[data-testid=stHeader]{display:none!important}iframe{border:0}</style>", unsafe_allow_html=True)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def load_payload(asset_version):
     maps = json.loads(MAP_ASSET.read_text(encoding="utf-8"))
     return {"maps": maps, **map_metrics()}
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def registration_sources():
+    page, charset = fetch(LISTING)
+    attachments = AttachmentParser()
+    attachments.feed(page.decode(charset))
+    return {month.strftime("%Y-%m"): {"filename": publication.filename, "url": publication.url}
+            for month, candidates in attachments.publications.items() if len(candidates) == 1
+            for publication in candidates}
 
 
 cached_district = st.cache_data(ttl=300, show_spinner=False)(district_stations)
@@ -62,6 +73,11 @@ def station_response(action, station_id, kakao_key):
 
 def handle_request(request, kakao_key):
     action = request.get("action")
+    if action == "registration-sources":
+        try:
+            return {"sources": registration_sources()}
+        except (OSError, ValueError):
+            return {"error": "국토교통부 원본 링크를 불러오지 못했습니다. 공개 자료 목록에서 파일명을 확인해 주세요."}
     if action == "district":
         code = str(request.get("code", ""))
         if not re.fullmatch(r"\d{5}", code):
