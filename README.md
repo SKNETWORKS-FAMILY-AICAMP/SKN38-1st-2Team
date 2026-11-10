@@ -64,14 +64,34 @@
 
 ## 디렉터리 구조
 
-| 경로 | 역할 |
-| --- | --- |
-| `app.py` | Streamlit 실행 진입점과 웹 요청 처리 |
-| `components/` | SVG 지도, 검색, 충전소 상세, 카페 팝업, 추이 대시보드 |
-| `services/` | MySQL 조회, 카카오 API 연동, 좌표 변환, 충전기 상태 처리 |
-| `jobs/` | 월별 등록통계와 충전기 상태 수집 작업 |
-| `db/import/` | 지역 매핑 생성과 초기 적재·검증 |
-| `assets/`, `data/`, `scripts/` | 지도 리소스, 행정경계·표본 데이터, 지도 리소스 생성 스크립트 |
-| `docs/`, `tests/` | 실행·운영 문서, 다이어그램, 코드 검증 |
+```text
+SKN38-1st-2Team/
+├── app.py                     # Streamlit 실행 진입점과 웹 요청 처리
+├── components/                # 지도와 충전소 상세, 대시보드 UI
+│   ├── index.html             # 실제 웹 화면의 HTML
+│   ├── map_view.js            # 지도 탐색, 검색, 마커와 대시보드
+│   ├── map_view.css           # 웹 화면 스타일
+│   ├── road_map.js            # MapLibre 도로 지도 연동
+│   └── bridge.js              # Streamlit과 브라우저 간 요청·응답
+├── services/                  # DB 조회, 카카오 API 연동, 좌표 변환과 충전기 상태 처리
+├── jobs/                      # 예약 수집 작업
+│   ├── crawl_registrations.py # 월별 자동차 등록통계 수집·검증·적재
+│   └── poll_charger_status.py # 전국 충전기 상태 변경분 수집
+├── db/                        # MySQL 데이터 준비
+│   └── import/                # 지역 매핑 생성과 초기 적재·검증
+├── assets/                    # 웹 지도 리소스
+│   ├── maps.json              # 행정경계와 지도 메타데이터
+│   └── maps/                  # 사전 생성한 전국·시도 SVG 지도
+├── data/                      # 지도 원본과 확인용 데이터
+│   ├── geo/                   # 시도·시군구 행정경계 GeoJSON
+│   ├── sample/                # 실제 적재 데이터의 표본
+│   └── demo/                  # 시연용 데이터
+├── scripts/                   # 지도 리소스와 시연 데이터 생성
+├── docs/                      # 실행·운영 가이드와 개발 회고
+│   └── diagrams/              # 시스템 워크플로와 MySQL ERD
+├── tests/                     # 검색, 상태 수집, 거리순 추천 로직 검증
+├── requirements.txt           # Python 의존성
+└── README.md                  # 프로젝트 개요와 사용 안내
+```
 
 Windows에서 재현하려면 MySQL에 `ev_infra`를 복원하고, 의존성을 설치한 Python 환경에서 `python -m streamlit run app.py`를 실행합니다. DB 연결, API 키 설정, 작업 스케줄러 등록은 별도 가이드를 참고하세요. [Windows 실행 및 운영 가이드](docs/windows-setup.md) · [개발 회고](docs/development-retrospective.md)

@@ -11,7 +11,7 @@ const sigMetrics = new Map(DATA.sigunguMetrics.map(s=>[s.sigungu_code,s]));
 const stationGroups = new Map();
 const districtLoadedAt = new Map();
 const remember=rows=>{for(const s of rows)stations.set(s.station_id,s);};
-let navigationVersion=0;
+let navigationVersion=0,mapClickTimer,overviewZoomBox=null;
 const state={sido:null,sig:null,station:null,cluster:null,nearby:null,detailBox:null};
 let searchMode='normal',pendingAddressId=0,searchVersion=0,searchTimer;
 const formatDistance=m=>m<1000?`직선거리 약 ${Math.round(m)}m`:`직선거리 약 ${(m/1000).toFixed(1)}km`;
@@ -41,7 +41,19 @@ $('grade-note').textContent=`공급 기준 kW/대 · 등록 ${DATA.reportMonth||
 const num=n=>Number(n||0).toLocaleString('ko-KR');
 function paint(value,values){if(value==null||!values.length)return '#e7e9e6';const min=Math.min(...values),max=Math.max(...values);const t=max===min?.5:(value-min)/(max-min);const a=[225,235,204],b=[95,134,84];return `rgb(${a.map((x,i)=>Math.round(x+(b[i]-x)*t)).join(',')})`;}
 function svgElement(tag,attrs){const n=document.createElementNS(NS,tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);return n;}
-function accessible(n,label,fn){n.setAttribute('role','button');n.setAttribute('tabindex','0');n.setAttribute('aria-label',label);n.addEventListener('click',e=>{e.stopPropagation();fn();});n.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fn();}});}
+function accessible(n,label,fn){
+ n.setAttribute('role','button');n.setAttribute('tabindex','0');n.setAttribute('aria-label',label);
+ n.addEventListener('click',event=>{
+  event.stopPropagation();clearTimeout(mapClickTimer);
+  if(event.detail>1)return;
+  if(event.detail===0||event.pointerType==='touch'){fn();return;}
+  // Give a mouse double-click time to resolve before opening a region or station.
+  mapClickTimer=setTimeout(fn,380);
+ });
+ n.addEventListener('keydown',event=>{
+  if(event.key==='Enter'||event.key===' '){event.preventDefault();clearTimeout(mapClickTimer);fn();}
+ });
+}
 function region(f,group,fn,metric,values){
  const district=!!values, count=metric?.chargers??0;
  const value=supplyValue(metric), grade=supplyGrade(value);
@@ -92,29 +104,40 @@ function clusterBox(group, base){
  return [x-width/2,y-height/2,width,height];
 }
 const localBox=()=>state.detailBox;
-function moveLocalMap(dx,dy){
+const zoomBox=()=>localBox()||overviewZoomBox;
+function setZoomBox(box){
+ if(state.sig&&!state.nearby)state.detailBox=box;
+ else overviewZoomBox=box;
+}
+function moveMap(dx,dy){
  const rect=mapSvg.getBoundingClientRect();
  if(!rect.width||!rect.height)return;
  const unit=visibleBox[2]/rect.width;
  const [x,y,w,h]=currentBox;
  cancelAnimationFrame(animation);animation=0;
- state.detailBox=[x+dx*unit,y+dy*unit,w,h];
+ setZoomBox([x+dx*unit,y+dy*unit,w,h]);
  $('hover-tip').hidden=true;
- setBox(state.detailBox);renderMarkers();updateStationView();EVRoadMap.finish(visibleBox);
+ setBox(zoomBox());renderMarkers();updateStationView();EVRoadMap.finish(visibleBox);
 }
-function zoomLocalMap(factor){
- if(!state.sig||state.nearby)return;
- const base=districtBox(),[x,y,w,h]=localBox()||base;
- if(factor>1&&(w*factor>=base[2]||h*factor>=base[3])){
-  setStationFocus(false);return;
- }
- const scale=Math.max(factor,Math.min(1,120/(w*metersPerUnit(latitudeAt(y+h/2)))));
+function zoomMap(factor,event){
+ clearTimeout(mapClickTimer);
+ const base=baseMapBox(),zoomed=zoomBox();
+ if(factor>1&&!zoomed)return;
+ const [x,y,w,h]=currentBox||cityBox();
+ const scale=factor<1?Math.max(factor,Math.min(1,120/(w*metersPerUnit(latitudeAt(y+h/2))))):factor;
  if(scale===1)return;
- state.detailBox=[x+w*(1-scale)/2,y+h*(1-scale)/2,w*scale,h*scale];
+ if(factor>1&&(w*scale>=base[2]||h*scale>=base[3])){
+  setZoomBox(null);
+ }else{
+  const matrix=event&&mapSvg.getScreenCTM();
+  const anchor=matrix?new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse()):{x:x+w/2,y:y+h/2};
+  setZoomBox([anchor.x+(x-anchor.x)*scale,anchor.y+(y-anchor.y)*scale,w*scale,h*scale]);
+ }
  $('hover-tip').hidden=true;
- renderBreadcrumbs();updateStationView();flyTo(state.detailBox);renderMarkers();
+ if(Boolean(zoomed)!==Boolean(zoomBox()))renderBreadcrumbs();
+ updateStationView();flyTo(cityBox(),event?.type!=='wheel');renderMarkers();
 }
-function cityBox(){
+function baseMapBox(){
  if(state.nearby){
   const points=[state.nearby.origin.point,...state.nearby.results.map(s=>s.point)];
   const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
@@ -122,9 +145,10 @@ function cityBox(){
   const w=Math.max(8,maxX-minX),h=Math.max(8,maxY-minY);
   return padded([(minX+maxX-w)/2,(minY+maxY-h)/2,w,h],.22);
  }
- if(state.sig)return localBox()||districtBox();
+ if(state.sig)return districtBox();
  return state.sido?padded(unionBox([provinces.get(state.sido),...DATA.maps.sigungu.filter(f=>f.parent===state.sido)])):nationalBox;
 }
+const cityBox=()=>zoomBox()||baseMapBox();
 function updateScale(unit){
  const box=localBox(),scale=$('station-scale');
  scale.hidden=!box||!Number.isFinite(unit)||unit<=0;
@@ -139,14 +163,15 @@ function updateStationView(){
  const canFocus=!!focus||(!!station&&!state.nearby&&!!state.sig&&station.sigungu_code===state.sig);
  $('map-workspace').classList.toggle('has-station-location',canFocus);
  toggle.hidden=!!focus||!canFocus;
- $('map-stage').classList.toggle('can-pan-map',!!focus);
- $('map-zoom').hidden=!state.sig||!!state.nearby;
- $('zoom-out').disabled=!focus;
- $('zoom-in').disabled=!!focus&&focus[2]*metersPerUnit(latitudeAt(focus[1]+focus[3]/2))<=120.001;
+ const zoomed=zoomBox();
+ $('map-stage').classList.toggle('can-pan-map',!!zoomed);
+ $('map-zoom').hidden=false;
+ $('zoom-out').disabled=!zoomed;
+ $('zoom-in').disabled=!!zoomed&&zoomed[2]*metersPerUnit(latitudeAt(zoomed[1]+zoomed[3]/2))<=120.001;
  $('home').setAttribute('aria-disabled',String(!!focus));$('home').tabIndex=focus?-1:0;
  overview.hidden=!focus;
  $('map-hint').textContent=state.nearby?'파란 링: 기준 위치 · 1~5번: 직선거리순':
-  focus?'스크롤 또는 드래그로 지도 이동 · + / −로 확대·축소':state.sig?'옆 구역 클릭으로 이동 · 마커 선택으로 충전소 정보 보기':
+  focus?'휠로 확대·축소 · 드래그로 이동':state.sig?'휠로 확대·축소 · 마커를 눌러 상세 보기':
   state.sido?'시·군·구를 눌러 들어가세요':'시·도를 눌러 들어가세요';
  $('back-map').title=focus?'시군구 전체 보기':state.nearby?'이전 지역 탐색으로 돌아가기':
   state.sig?`${provinces.get(state.sido).name} 전체 보기`:'전국 전체 보기';
@@ -182,11 +207,11 @@ function setBox(box){
  currentBox=box;visibleBox=viewportBox(box);mapSvg.setAttribute('viewBox',visibleBox.join(' '));
  resizeMarkers();EVRoadMap.frame(visibleBox);
 }
-function flyTo(target){
+function flyTo(target,animate=true){
  cancelAnimationFrame(animation);animation=0;
  if(localBox()||state.nearby)EVRoadMap.enter(viewportBox(target));else EVRoadMap.leave();
  const from=currentBox||target;
- if(from.every((v,i)=>Math.abs(v-target[i])<.001)){setBox(target);EVRoadMap.finish(visibleBox);return;}
+ if(!animate||from.every((v,i)=>Math.abs(v-target[i])<.001)){setBox(target);EVRoadMap.finish(visibleBox);return;}
  const start=performance.now(),duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:720;
  function tick(now){
   const t=duration?Math.min(1,(now-start)/duration):1,ease=t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
@@ -202,6 +227,7 @@ new ResizeObserver(()=>{
  setBox(currentBox);renderMarkers();EVRoadMap.resize(visibleBox);
 }).observe(mapSvg);
 function navigate(next={}){
+ clearTimeout(mapClickTimer);overviewZoomBox=null;
  navigationVersion++;
  state.sido=next.sido||null;state.sig=next.sig||null;state.station=next.station||null;state.cluster=null;state.nearby=next.nearby||null;state.detailBox=selectedStationBox();
  $('hover-tip').hidden=true;
@@ -862,29 +888,31 @@ favoritesSidebar.addEventListener('keydown',event=>{
 $('home').addEventListener('click',e=>{e.preventDefault();if(!localBox())navigate();});
 $('back-map').addEventListener('click',()=>{if(localBox())setStationFocus(false);else if(state.nearby)exitNearby();else if(state.sig)navigate({sido:state.sido});else navigate();});
 $('station-focus-toggle').addEventListener('click',()=>setStationFocus(true));
-$('zoom-in').addEventListener('click',()=>zoomLocalMap(.5));
-$('zoom-out').addEventListener('click',()=>zoomLocalMap(2));
+$('zoom-in').addEventListener('click',()=>zoomMap(.5));
+$('zoom-out').addEventListener('click',()=>zoomMap(2));
 mapSvg.addEventListener('wheel',event=>{
- if(!localBox()||event.ctrlKey||event.metaKey)return;
+ if(!event.deltaY||event.ctrlKey||event.metaKey)return;
  event.preventDefault();
- const scale=event.deltaMode===1?16:event.deltaMode===2?mapSvg.clientHeight:1;
- const horizontal=event.shiftKey&&!event.deltaX;
- moveLocalMap((horizontal?event.deltaY:event.deltaX)*scale,(horizontal?0:event.deltaY)*scale);
+ const unit=event.deltaMode===1?16:event.deltaMode===2?mapSvg.clientHeight:1;
+ const delta=Math.max(-140,Math.min(140,event.deltaY*unit));
+ zoomMap(Math.exp(delta*.005),event);
 },{passive:false});
+mapSvg.addEventListener('dblclick',event=>{event.preventDefault();zoomMap(.5,event);});
+mapSvg.addEventListener('contextmenu',event=>{event.preventDefault();zoomMap(2,event);});
 let mapDrag;
 mapSvg.addEventListener('pointerdown',event=>{
- if(!localBox()||!event.isPrimary||event.button!==0)return;
+ if(!zoomBox()||!event.isPrimary||event.button!==0)return;
  mapDrag={id:event.pointerId,x:event.clientX,y:event.clientY,active:false};
 });
 mapSvg.addEventListener('pointermove',event=>{
- if(!localBox()||mapDrag?.id!==event.pointerId)return;
+ if(!zoomBox()||mapDrag?.id!==event.pointerId)return;
  const dx=mapDrag.x-event.clientX,dy=mapDrag.y-event.clientY;
  if(!mapDrag.active){
   if(Math.hypot(dx,dy)<5)return;
-  mapDrag.active=true;mapSvg.setPointerCapture(event.pointerId);mapSvg.classList.add('is-panning');
+  clearTimeout(mapClickTimer);mapDrag.active=true;mapSvg.setPointerCapture(event.pointerId);mapSvg.classList.add('is-panning');
  }
  mapDrag.x=event.clientX;mapDrag.y=event.clientY;
- moveLocalMap(dx,dy);
+ moveMap(dx,dy);
 });
 function endMapDrag(event){
  if(mapDrag?.id!==event.pointerId)return;
