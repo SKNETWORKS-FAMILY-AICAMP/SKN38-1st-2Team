@@ -2,20 +2,34 @@
 
 전기차가 많이 등록된 지역에 충전 설비도 충분한지 비교하고, 실제로 방문할 충전소를 찾는 웹 서비스입니다. 전국 지도에서 시도별 공급 수준을 살펴보고, 시군구로 들어가면 충전소 위치와 저장된 충전기 상태를 확인할 수 있습니다.
 
+## 함께 만든 사람들
+
+<table>
+  <tr>
+    <th align="center" width="25%">이승화 · 조장</th>
+    <th align="center" width="25%">김지웅</th>
+    <th align="center" width="25%">신동희</th>
+    <th align="center" width="25%">주연호</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/team/lee-seunghwa.png" height="140" alt="이승화의 캐릭터 피츄"></td>
+    <td align="center"><img src="docs/images/team/kim-jiwoong.png" height="140" alt="김지웅의 캐릭터 나몰빼미"></td>
+    <td align="center"><img src="docs/images/team/shin-donghee.png" height="140" alt="신동희의 캐릭터 이브이"></td>
+    <td align="center"><img src="docs/images/team/ju-yeonho.png" height="140" alt="주연호의 캐릭터 나옹"></td>
+  </tr>
+  <tr>
+    <td align="center">데이터 전처리<br>일정 관리</td>
+    <td align="center">데이터 수집 및 자료 정리<br>발표 자료 제작</td>
+    <td align="center">ERD 구조 및 웹 설계</td>
+    <td align="center">아이디어 기획<br>API 호출부 구현</td>
+  </tr>
+</table>
+
 | 충전소 | 충전기 | 지도에 연결한 충전소 | 월별 등록통계 |
 | ---: | ---: | ---: | --- |
 | 102,213곳 | 529,359기 | 101,355곳 | 2020년 1월~2026년 9월, 81개월 |
 
 `ev_infra` 적재본 기준입니다. 충전기 수는 삭제·이용 제한 항목을 포함한 전체 행 수입니다. 좌표와 지역 코드 확인이 필요한 충전소 858곳은 지도 마커와 거리순 추천에서 제외했습니다.
-
-## 팀원 및 역할
-
-| 팀원 | 역할 |
-| --- | --- |
-| 이승화 (조장) | 데이터 전처리, 일정 관리 |
-| 김지웅 | 데이터 수집 및 자료 정리, 발표 자료 제작 |
-| 신동희 | ERD 구조 및 웹 설계 |
-| 주연호 | 아이디어 기획, API 호출부 구현 |
 
 ## 웹 주요 기능
 
