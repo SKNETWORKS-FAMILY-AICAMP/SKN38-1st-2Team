@@ -230,9 +230,3 @@ summary:focus-visible{outline:2px solid var(--accent-deep);outline-offset:3px;bo
 .marker-count-bg{fill:var(--marker-body);stroke:var(--marker-outline);stroke-width:1}
 .marker-count{fill:#fff;stroke:none;font-size:9px;font-weight:700;pointer-events:none}
 .marker-unknown .marker-count{fill:#263b30}
-.marker-legend{padding:8px 12px;flex-wrap:wrap;border-top:1px solid var(--edge)}
-.marker-legend span{display:inline-flex;align-items:center;gap:5px}
-.marker-legend .marker-key{width:10px;height:10px;border-radius:50%;background:none}
-.marker-legend .marker-key-ready{background:#8c5635}
-.marker-legend .marker-key-unavailable{background:#68747c}
-.marker-legend .marker-key-unknown{background:#edf2ee;border:1px dashed #647368}

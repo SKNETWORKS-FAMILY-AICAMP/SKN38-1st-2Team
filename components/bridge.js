@@ -2,6 +2,16 @@
 let booted=false,parentOrigin='*',pending;
 const queue=[];
 const send=(type,extra={})=>window.parent.postMessage({isStreamlitMessage:true,type,...extra},parentOrigin);
+const app=document.querySelector('.app');
+let frameHeight=0;
+function resizeFrame(){
+  if(!booted)return;
+  const height=Math.ceil(app.getBoundingClientRect().height);
+  if(!height||height===frameHeight)return;
+  frameHeight=height;
+  send('streamlit:setFrameHeight',{height});
+}
+new ResizeObserver(resizeFrame).observe(app);
 function advance(){
   if(pending||!queue.length)return;
   pending=queue.shift();
@@ -31,6 +41,6 @@ window.addEventListener('message',event=>{
     const script=document.createElement('script');script.src='map_view.js';document.body.append(script);
   }
   if(pending&&args.response?.requestId===pending.value.requestId)finish(args.response);
-  send('streamlit:setFrameHeight',{height:1120});
+  resizeFrame();
 });
 send('streamlit:componentReady',{apiVersion:1});

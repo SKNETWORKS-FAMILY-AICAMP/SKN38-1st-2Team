@@ -249,7 +249,6 @@ function navigate(next={}){
  const showsDistricts=!!(state.sido||state.nearby);
  $('grade-legend').hidden=showsDistricts;
  $('count-legend').hidden=!showsDistricts;
- $('marker-legend').hidden=!state.sig&&!state.nearby;
  const status=$('district-load-status');
  status.hidden=true;status.replaceChildren();
  if(state.sig)loadDistrict(state.sig,navigationVersion);
@@ -695,12 +694,16 @@ async function openCafes(station){
  const list=node('ul',undefined,'cafe-list');
  for(const place of result.cafes){
   const item=node('li'),heading=node('div',undefined,'cafe-item-heading');
-  const query=[place.name,place.address].filter(Boolean).join(' ');
-  const link=node('a',place.name,'cafe-map-link');
-  link.href=`https://map.naver.com/p/search/${encodeURIComponent(query)}`;
-  link.target='_blank';link.rel='noopener noreferrer';
-  link.setAttribute('aria-label',place.name+' 네이버 지도에서 검색 (새 탭)');
-  heading.append(link);
+  const address=place.address?.trim();
+  if(address){
+   const link=node('a',place.name,'cafe-map-link');
+   link.href=`https://map.naver.com/p/search/${encodeURIComponent(address)}`;
+   link.target='_blank';link.rel='noopener noreferrer';
+   link.setAttribute('aria-label',place.name+' 주소를 네이버 지도에서 검색 (새 탭)');
+   heading.append(link);
+  }else{
+   heading.append(node('strong',place.name));
+  }
   if(place.distance!=null&&place.distance!=='')heading.append(node('span',place.distance+'m','access-tag'));
   item.append(heading);
   if(place.address)item.append(node('p',place.address,'muted small'));
